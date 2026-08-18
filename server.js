@@ -5,10 +5,39 @@ const dotenv = require("dotenv");
 
 dotenv.config();
 
-const port = Number(process.env.PORT || 3000);
-const aiBaseUrl = String(process.env.AI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
-const aiModel = process.env.AI_MODEL || "gpt-4o-mini";
 const maxBodySize = 32 * 1024;
+
+function normalizeProviderConfig(env = process.env) {
+  const provider = String(env.AI_PROVIDER || "openai").trim().toLowerCase() || "openai";
+  const baseUrl = String(env.AI_BASE_URL || {
+    openai: "https://api.openai.com/v1",
+    custom: "https://api.openai.com/v1"
+  }[provider] || "https://api.openai.com/v1").replace(/\/$/, "");
+  const model = String(env.AI_MODEL || {
+    openai: "gpt-4o-mini",
+    custom: "gpt-4o-mini"
+  }[provider] || "gpt-4o-mini").trim();
+  const apiKey = String(env.AI_API_KEY || "").trim();
+
+  const headers = {
+    "Content-Type": "application/json"
+  };
+
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
+
+  return {
+    provider,
+    baseUrl,
+    model,
+    apiKey,
+    headers
+  };
+}
+
+const providerConfig = normalizeProviderConfig();
+const port = Number(process.env.PORT || 3000);
 
 function sendJson(response, status, body) {
   response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
@@ -42,12 +71,14 @@ function localReply(message) {
 }
 
 async function askAi(payload) {
-  if (!process.env.AI_API_KEY) return localReply(payload.message);
-  const response = await fetch(`${aiBaseUrl}/chat/completions`, {
+  const config = normalizeProviderConfig();
+  if (!config.apiKey) return localReply(payload.message);
+
+  const response = await fetch(`${config.baseUrl}/chat/completions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.AI_API_KEY}` },
+    headers: config.headers,
     body: JSON.stringify({
-      model: aiModel,
+      model: config.model,
       temperature: 0.3,
       max_tokens: 180,
       messages: [
@@ -62,12 +93,12 @@ async function askAi(payload) {
 }
 
 const server = http.createServer(async (request, response) => {
-  if (request.method === "GET" && request.url === "/api/health") return sendJson(response, 200, { ok: true, aiConfigured: Boolean(process.env.AI_API_KEY) });
+  if (request.method === "GET" && request.url === "/api/health") return sendJson(response, 200, { ok: true, aiConfigured: Boolean(providerConfig.apiKey), provider: providerConfig.provider });
   if (request.method === "POST" && request.url === "/api/ai/chat") {
     try {
       const payload = await readJson(request);
       const reply = await askAi(payload);
-      return sendJson(response, 200, { reply });
+      return sendJson(response, 200, { reply, provider: providerConfig.provider });
     } catch (error) {
       console.error(error.message);
       return sendJson(response, 502, { error: "O assistente está temporariamente indisponível." });
@@ -84,4 +115,13 @@ const server = http.createServer(async (request, response) => {
   sendJson(response, 404, { error: "Not found" });
 });
 
-server.listen(port, () => console.log(`Nativo Açaí em http://localhost:${port}`));
+if (require.main === module) {
+  server.listen(port, () => console.log(`Nativo Açaí em http://localhost:${port}`));
+}
+
+module.exports = {
+  normalizeProviderConfig,
+  localReply,
+  askAi,
+  providerConfig
+};

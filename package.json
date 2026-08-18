@@ -4,7 +4,8 @@
   "private": true,
   "description": "Loja demonstrativa com assistente de IA no frontend e backend seguro.",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"

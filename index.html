@@ -1219,6 +1219,7 @@ const defaultProducts=[
   {id:5,name:"Açaí Família",cat:"especiais",price:34.90,badge:"700 ml",img:IMG1,desc:"Porção maior para dividir ou aproveitar sem pressa.",tags:["700 ml","5 acompanhamentos"]},
   {id:6,name:"Combo Dupla",cat:"combos",price:31.90,badge:"Combo",img:IMG2,desc:"Dois copos de 300 ml com personalização separada.",tags:["2 unidades","Economize"]}
 ];
+var PRODUCT_CATEGORIES={classicos:"Clássicos",especiais:"Especiais",zero:"Sem açúcar",combos:"Combos"};
 let products=loadProducts();
 
 let cart=JSON.parse(localStorage.getItem("nativo_cart")||"[]");
@@ -1226,7 +1227,6 @@ let coupon=localStorage.getItem("nativo_coupon")==="PRIMEIRO5";
 let selectedProduct=null;
 
 const money=v=>v.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
-const PRODUCT_CATEGORIES={classicos:"Clássicos",especiais:"Especiais",zero:"Sem açúcar",combos:"Combos"};
 function safeProductImage(value){
   const image=String(value||"").trim();
   try{const url=new URL(image);return ["http:","https:"].includes(url.protocol)?image:IMG1}catch(_){return IMG1}
@@ -1552,15 +1552,15 @@ function toast(txt){
 /* ===== SISTEMA DE CONTAS E PAINEL ADMINISTRATIVO =====
    Protótipo funcional local: usuários, sessão e pedidos são persistidos no localStorage.
    Em produção, autenticação, senhas e autorização devem ficar no servidor. */
-const AUTH_USERS_KEY="nativo_users_v1";
-const AUTH_SESSION_KEY="nativo_session_v1";
-const ORDERS_KEY="nativo_orders_v1";
-const FEEDBACK_KEY="nativo_feedback_v1";
-const LAST_ORDER_KEY="nativo_last_order_v1";
-const ORDER_EVENT_KEY="nativo_order_status_event_v1";
-const GOOGLE_CLIENT_ID=(document.querySelector('meta[name="google-signin-client_id"]')?.content||"").trim();
-const TAB_SESSION_MARK="nativo_tab_session_initialized_v1";
-const OWNER_EMAIL="dono@nativoacai.com";
+var AUTH_USERS_KEY="nativo_users_v1";
+var AUTH_SESSION_KEY="nativo_session_v1";
+var ORDERS_KEY="nativo_orders_v1";
+var FEEDBACK_KEY="nativo_feedback_v1";
+var LAST_ORDER_KEY="nativo_last_order_v1";
+var ORDER_EVENT_KEY="nativo_order_status_event_v1";
+var GOOGLE_CLIENT_ID=(document.querySelector('meta[name="google-signin-client_id"]')?.content||"").trim();
+var TAB_SESSION_MARK="nativo_tab_session_initialized_v1";
+var OWNER_EMAIL="dono@nativoacai.com";
 let feedbackRating=0;
 
 function safeParse(key,fallback){
@@ -1692,7 +1692,7 @@ function updateAccessUI(){
 }
 
 function openAccount(mode="login"){
-  renderAccount(mode);showLayer("accountModal");
+  showLayer("accountModal");renderAccount(mode);
 }
 function renderAccount(mode="login"){
   const user=currentUser(),body=document.getElementById("accountBody"),sub=document.getElementById("accountModalSubtitle");
