@@ -461,6 +461,12 @@ a{text-decoration:none;color:inherit}
 .admin-user-actions button.danger{color:#9B2C2C}
 .admin-only-owner{display:none}
 .admin-only-owner.show{display:block}
+.admin-product-form{padding:18px;border-bottom:1px solid var(--line);background:#FCFAFD}
+.admin-product-form .form-grid{margin-bottom:12px}
+.admin-product-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.admin-product-actions button{border:1px solid var(--line);background:white;border-radius:9px;padding:8px 10px;font-size:10px;font-weight:850;color:var(--purple-800)}
+.admin-product-actions button.danger{color:#9B2C2C}
+.admin-product-preview{width:54px;height:44px;border-radius:8px;object-fit:cover;background:#F1EDF2}
 
 @media(max-width:960px){.admin-stats{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:640px){
@@ -1191,6 +1197,7 @@ body{background:#F4F5F7}
         <button class="admin-tab active" data-admin-tab="orders" onclick="showAdminTab('orders',this)">Pedidos</button>
         <button class="admin-tab" data-admin-tab="customers" onclick="showAdminTab('customers',this)">Clientes e endereços</button>
         <button class="admin-tab" data-admin-tab="feedback" onclick="showAdminTab('feedback',this)">Feedbacks</button>
+        <button class="admin-tab admin-only-owner" data-admin-tab="products" onclick="showAdminTab('products',this)">Produtos</button>
         <button class="admin-tab admin-only-owner" data-admin-tab="team" onclick="showAdminTab('team',this)">Equipe e acessos</button>
       </div>
       <div id="adminContent"></div>
@@ -1202,8 +1209,9 @@ body{background:#F4F5F7}
 <script>
 const IMG1="https://images.pexels.com/photos/14167805/pexels-photo-14167805.jpeg?auto=compress&dpr=1&h=750&w=1260";
 const IMG2="https://images.pexels.com/photos/12273052/pexels-photo-12273052.jpeg?auto=compress&dpr=1&h=750&w=1260";
+const PRODUCTS_KEY="nativo_products_v1";
 
-const products=[
+const defaultProducts=[
   {id:1,name:"Açaí Clássico",cat:"classicos",price:16.90,badge:"Mais pedido",img:IMG1,desc:"Açaí cremoso com banana, morango e granola.",tags:["300 ml","3 acompanhamentos"]},
   {id:2,name:"Açaí Power",cat:"classicos",price:22.90,badge:"Favorito",img:IMG2,desc:"Açaí com banana, granola, paçoca e leite em pó.",tags:["500 ml","4 acompanhamentos"]},
   {id:3,name:"Nativo Supreme",cat:"especiais",price:28.90,badge:"Especial",img:IMG1,desc:"Açaí com creme, morango, leite em pó e crocantes.",tags:["500 ml","Premium"]},
@@ -1211,12 +1219,31 @@ const products=[
   {id:5,name:"Açaí Família",cat:"especiais",price:34.90,badge:"700 ml",img:IMG1,desc:"Porção maior para dividir ou aproveitar sem pressa.",tags:["700 ml","5 acompanhamentos"]},
   {id:6,name:"Combo Dupla",cat:"combos",price:31.90,badge:"Combo",img:IMG2,desc:"Dois copos de 300 ml com personalização separada.",tags:["2 unidades","Economize"]}
 ];
+let products=loadProducts();
 
 let cart=JSON.parse(localStorage.getItem("nativo_cart")||"[]");
 let coupon=localStorage.getItem("nativo_coupon")==="PRIMEIRO5";
 let selectedProduct=null;
 
 const money=v=>v.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const PRODUCT_CATEGORIES={classicos:"Clássicos",especiais:"Especiais",zero:"Sem açúcar",combos:"Combos"};
+function safeProductImage(value){
+  const image=String(value||"").trim();
+  try{const url=new URL(image);return ["http:","https:"].includes(url.protocol)?image:IMG1}catch(_){return IMG1}
+}
+function normalizeProduct(value,index=0){
+  const source=value||{},name=compactSpaces(source.name),desc=compactSpaces(source.desc),cat=PRODUCT_CATEGORIES[source.cat]?source.cat:"classicos";
+  const price=Number(source.price),tags=Array.isArray(source.tags)?source.tags.map(compactSpaces).filter(Boolean).slice(0,6):[];
+  if(name.length<2||name.length>80||desc.length<4||desc.length>240||!Number.isFinite(price)||price<=0||price>10000)return null;
+  return {id:source.id||`product_${Date.now()}_${index}`,name,cat,price:Number(price.toFixed(2)),badge:compactSpaces(source.badge).slice(0,40)||"Novidade",img:safeProductImage(source.img),desc,tags};
+}
+function loadProducts(){
+  const stored=safeParse(PRODUCTS_KEY,null);
+  if(!Array.isArray(stored))return defaultProducts.map(normalizeProduct).filter(Boolean);
+  const valid=stored.map(normalizeProduct).filter(Boolean);
+  return valid.length?valid:defaultProducts.map(normalizeProduct).filter(Boolean);
+}
+function saveProducts(){localStorage.setItem(PRODUCTS_KEY,JSON.stringify(products))}
 
 let currentProductFilter="all";
 let catalogSearchTerm="";
@@ -1237,14 +1264,14 @@ function renderProducts(filter=currentProductFilter){
   grid.innerHTML=list.map(p=>`
     <article class="product">
       <div class="product-media">
-        <img src="${p.img}" alt="${p.name}" loading="lazy">
-        <span class="product-badge">${p.badge}</span>
+        <img src="${safeProductImage(p.img)}" alt="${escapeHtml(p.name)}" loading="lazy">
+        <span class="product-badge">${escapeHtml(p.badge)}</span>
       </div>
       <div class="product-content">
-        <h3>${p.name}</h3>
-        <p class="product-description">${p.desc}</p>
+        <h3>${escapeHtml(p.name)}</h3>
+        <p class="product-description">${escapeHtml(p.desc)}</p>
         <div class="product-rating"><span class="star">★</span><strong>4,9</strong><span>• feito na hora</span></div>
-        <div class="product-meta">${p.tags.map(t=>`<span class="microtag">${t}</span>`).join("")}</div>
+        <div class="product-meta">${p.tags.map(t=>`<span class="microtag">${escapeHtml(t)}</span>`).join("")}</div>
         <div class="product-price-block">
           <small>a partir de</small>
           <span class="price">${money(p.price)}</span>
@@ -1285,11 +1312,11 @@ function openCustomize(index){
   const p=products[index];
   document.getElementById("customBody").innerHTML=`
     <div class="custom-product">
-      <img src="${p.img}" alt="${p.name}">
+      <img src="${safeProductImage(p.img)}" alt="${escapeHtml(p.name)}">
       <div>
-        <div class="label">${p.badge}</div>
-        <h3 style="margin:6px 0 7px;font-size:24px;letter-spacing:-.04em">${p.name}</h3>
-        <p style="margin:0;color:var(--muted);line-height:1.6;font-size:13px">${p.desc}</p>
+        <div class="label">${escapeHtml(p.badge)}</div>
+        <h3 style="margin:6px 0 7px;font-size:24px;letter-spacing:-.04em">${escapeHtml(p.name)}</h3>
+        <p style="margin:0;color:var(--muted);line-height:1.6;font-size:13px">${escapeHtml(p.desc)}</p>
         <div style="margin-top:12px;font-size:20px;font-weight:950;color:var(--purple-900)" id="customPrice">${money(p.price)}</div>
       </div>
     </div>
@@ -1873,6 +1900,7 @@ function showAdminTab(tab,btn){
   if(tab==="orders")renderAdminOrders();
   if(tab==="customers")renderAdminCustomers();
   if(tab==="feedback")renderAdminFeedback();
+  if(tab==="products")renderAdminProducts();
   if(tab==="team")renderAdminTeam();
 }
 function renderAdminOrders(filter=""){
@@ -1909,6 +1937,44 @@ function renderAdminFeedback(filter=""){
   const feedbacks=getFeedback().sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).filter(f=>!q||[f.displayName,f.text,String(f.rating)].join(" ").toLowerCase().includes(q));
   document.getElementById("adminContent").innerHTML=`<div class="admin-card"><div class="admin-card-head"><h3>Feedbacks recebidos</h3><input placeholder="Buscar por nome ou comentário" oninput="renderAdminFeedback(this.value)" value="${escapeHtml(filter)}"></div>${feedbacks.length?`<div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Avaliação</th><th>Cliente</th><th>Feedback</th><th>Data</th></tr></thead><tbody>${feedbacks.map(f=>`<tr><td><strong>${"★".repeat(Number(f.rating||0))}${"☆".repeat(Math.max(0,5-Number(f.rating||0)))}</strong><small>${Number(f.rating||0)}/5</small></td><td><strong>${escapeHtml(f.displayName||"Anônimo")}</strong><small>${f.anonymous?"Publicação anônima":"Conta identificada"}</small></td><td class="admin-items">${escapeHtml(f.text||"")}</td><td>${new Date(f.createdAt).toLocaleString("pt-BR")}</td></tr>`).join("")}</tbody></table></div>`:'<div class="admin-empty">Nenhum feedback recebido ainda.</div>'}</div>`;
 }
+function renderAdminProducts(editId=""){
+  if(!isOwner()){toast("Somente o dono pode gerenciar produtos");return}
+  const editing=products.find(p=>String(p.id)===String(editId))||null;
+  const value=field=>escapeHtml(editing?.[field]??"");
+  document.getElementById("adminContent").innerHTML=`<div class="admin-card">
+    <div class="admin-card-head"><div><h3>${editing?"Editar produto":"Novo produto"}</h3><small style="color:var(--muted)">O produto aparece no cardápio depois de salvar.</small></div></div>
+    <form class="admin-product-form" onsubmit="saveAdminProduct(event,'${escapeHtml(String(editing?.id||""))}')">
+      <div class="form-grid">
+        <div class="field"><label>Nome do produto</label><input name="name" required maxlength="80" value="${value("name")}" placeholder="Ex.: Açaí de morango"></div>
+        <div class="field"><label>Preço</label><input name="price" required type="number" min="0.01" max="10000" step="0.01" value="${editing?.price??""}" placeholder="19,90"></div>
+        <div class="field"><label>Categoria</label><select name="cat">${Object.entries(PRODUCT_CATEGORIES).map(([key,label])=>`<option value="${key}" ${editing?.cat===key?"selected":""}>${label}</option>`).join("")}</select></div>
+        <div class="field"><label>Selo</label><input name="badge" maxlength="40" value="${value("badge")}" placeholder="Mais pedido"></div>
+        <div class="field full"><label>Descrição</label><textarea name="desc" required maxlength="240" rows="3" placeholder="Explique os ingredientes e o tamanho.">${value("desc")}</textarea></div>
+        <div class="field full"><label>Foto por URL</label><input name="img" type="url" value="${value("img")}" placeholder="https://..."><span class="field-help">Use uma imagem pública com endereço HTTPS.</span></div>
+        <div class="field full"><label>Tags separadas por vírgula</label><input name="tags" maxlength="180" value="${escapeHtml((editing?.tags||[]).join(", "))}" placeholder="300 ml, 3 acompanhamentos"></div>
+      </div>
+      <div class="admin-product-actions"><button type="button" onclick="showAdminTab('products',document.querySelector('[data-admin-tab=products]'))">Limpar</button><button class="btn btn-primary" type="submit">${editing?"Salvar alterações":"Cadastrar produto"}</button></div>
+    </form>
+    <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Foto</th><th>Produto</th><th>Categoria</th><th>Preço</th><th>Ações</th></tr></thead><tbody>${products.map(p=>`<tr><td><img class="admin-product-preview" src="${safeProductImage(p.img)}" alt=""></td><td><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.desc)}</small></td><td>${escapeHtml(PRODUCT_CATEGORIES[p.cat])}</td><td><strong>${money(p.price)}</strong></td><td><div class="admin-user-actions"><button onclick="renderAdminProducts('${escapeHtml(String(p.id))}')">Editar</button><button class="danger" onclick="deleteAdminProduct('${escapeHtml(String(p.id))}')">Excluir</button></div></td></tr>`).join("")}</tbody></table></div>
+  </div>`;
+}
+function saveAdminProduct(event,editId=""){
+  event.preventDefault();
+  if(!isOwner()){toast("Somente o dono pode salvar produtos");return}
+  const data=Object.fromEntries(new FormData(event.currentTarget).entries());
+  const product=normalizeProduct({...data,id:editId||undefined,tags:String(data.tags||"").split(",")});
+  if(!product){toast("Confira nome, descrição e preço do produto");return}
+  if(editId){const index=products.findIndex(p=>String(p.id)===String(editId));if(index<0){toast("Produto não encontrado");return}products[index]=product}
+  else products.push(product);
+  saveProducts();renderProducts();renderAdminProducts();toast(editId?"Produto atualizado":"Produto cadastrado");
+}
+function deleteAdminProduct(id){
+  if(!isOwner()){toast("Somente o dono pode excluir produtos");return}
+  if(products.length<=1){toast("Mantenha pelo menos um produto no cardápio");return}
+  const product=products.find(p=>String(p.id)===String(id));if(!product)return;
+  if(!confirm(`Excluir ${product.name}?`))return;
+  products=products.filter(p=>String(p.id)!==String(id));saveProducts();renderProducts();renderAdminProducts();toast("Produto excluído");
+}
 function renderAdminTeam(){
   if(!isOwner())return;
   const users=getUsers().filter(u=>u.role!=="owner");
@@ -1928,6 +1994,7 @@ function syncOperationalUI(){
     if(currentAdminTab==="orders")renderAdminOrders();
     if(currentAdminTab==="customers")renderAdminCustomers();
     if(currentAdminTab==="feedback")renderAdminFeedback();
+    if(currentAdminTab==="products"&&isOwner())renderAdminProducts();
     if(currentAdminTab==="team"&&isOwner())renderAdminTeam();
     document.querySelectorAll(".admin-tab").forEach(b=>b.classList.toggle("active",b===active));
   }
