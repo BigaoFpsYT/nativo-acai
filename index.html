@@ -1841,7 +1841,9 @@ function handleGoogleCredential(response){
   }
   if(!user.phone||!user.address){
     window.pendingGoogleUser={user,isNew:!users.some(item=>item.id===user.id)};
+    showLayer("accountModal");
     renderGoogleProfileForm(user);
+    toast("Agora informe seu WhatsApp e endereço para continuar");
     return;
   }
   if(!users.some(item=>item.id===user.id))users.push(user);
