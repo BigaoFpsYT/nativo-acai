@@ -477,6 +477,9 @@ a{text-decoration:none;color:inherit}
 .admin-product-actions button{border:1px solid var(--line);background:white;border-radius:9px;padding:8px 10px;font-size:10px;font-weight:850;color:var(--purple-800)}
 .admin-product-actions button.danger{color:#9B2C2C}
 .admin-product-preview{width:54px;height:44px;border-radius:8px;object-fit:cover;background:#F1EDF2}
+.product-image-picker{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.product-image-picker-preview{width:72px;height:58px;border-radius:10px;object-fit:cover;background:#F1EDF2;border:1px solid var(--line)}
+.product-image-picker input[type="file"]{display:none!important}
 
 @media(max-width:960px){.admin-stats{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:640px){
@@ -2066,7 +2069,7 @@ function renderAdminProducts(editId=""){
         <div class="field"><label>Categoria</label><select name="cat">${Object.entries(PRODUCT_CATEGORIES).map(([key,label])=>`<option value="${key}" ${editing?.cat===key?"selected":""}>${label}</option>`).join("")}</select></div>
         <div class="field"><label>Selo</label><input name="badge" maxlength="40" value="${value("badge")}" placeholder="Mais pedido"></div>
         <div class="field full"><label>Descrição</label><textarea name="desc" required maxlength="240" rows="3" placeholder="Explique os ingredientes e o tamanho.">${value("desc")}</textarea></div>
-        <div class="field full"><label>Foto por URL</label><input name="img" type="url" value="${value("img")}" placeholder="https://..."><span class="field-help">Use uma imagem pública com endereço HTTPS.</span></div>
+        <div class="field full"><label>Imagem do produto</label><div class="product-image-picker"><img id="productImagePreview" class="product-image-picker-preview" src="${safeProductImage(editing?.img||IMG1)}" alt="Prévia do produto"><label class="profile-upload-button" for="productImageInput"><svg class="icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 13v5a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-5"/></svg>Escolher imagem</label><input id="productImageInput" name="imageFile" type="file" accept="image/*" capture="environment" onchange="previewProductImage(this)"></div><input name="img" type="url" value="${value("img")}" placeholder="Ou cole uma URL HTTPS"><span class="field-help">No celular, escolha da galeria ou tire uma foto; no PC, selecione um arquivo PNG, JPG ou WEBP.</span></div>
         <div class="field full"><label>Tags separadas por vírgula</label><input name="tags" maxlength="180" value="${escapeHtml((editing?.tags||[]).join(", "))}" placeholder="300 ml, 3 acompanhamentos"></div>
       </div>
       <div class="admin-product-actions"><button type="button" onclick="showAdminTab('products',document.querySelector('[data-admin-tab=products]'))">Limpar</button><button class="btn btn-primary" type="submit">${editing?"Salvar alterações":"Cadastrar produto"}</button></div>
@@ -2074,10 +2077,16 @@ function renderAdminProducts(editId=""){
     <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Foto</th><th>Produto</th><th>Categoria</th><th>Preço</th><th>Ações</th></tr></thead><tbody>${products.map(p=>`<tr><td><img class="admin-product-preview" src="${safeProductImage(p.img)}" alt=""></td><td><strong>${escapeHtml(p.name)}</strong><small>${escapeHtml(p.desc)}</small></td><td>${escapeHtml(PRODUCT_CATEGORIES[p.cat])}</td><td><strong>${money(p.price)}</strong></td><td><div class="admin-user-actions"><button onclick="renderAdminProducts('${escapeHtml(String(p.id))}')">Editar</button><button class="danger" onclick="deleteAdminProduct('${escapeHtml(String(p.id))}')">Excluir</button></div></td></tr>`).join("")}</tbody></table></div>
   </div>`;
 }
-function saveAdminProduct(event,editId=""){
+function previewProductImage(input){
+  const file=input.files?.[0],preview=document.getElementById("productImagePreview");
+  if(!file||!preview)return;
+  const reader=new FileReader();reader.onload=()=>{preview.src=reader.result};reader.readAsDataURL(file);
+}
+async function saveAdminProduct(event,editId=""){
   event.preventDefault();
   if(!isOwner()){toast("Somente o dono pode salvar produtos");return}
   const data=Object.fromEntries(new FormData(event.currentTarget).entries());
+  try{const uploadedImage=await readProfileImage(data.imageFile);if(uploadedImage)data.img=uploadedImage}catch(_){toast("Não foi possível carregar a imagem do produto");return}
   const product=normalizeProduct({...data,id:editId||undefined,tags:String(data.tags||"").split(",")});
   if(!product){toast("Confira nome, descrição e preço do produto");return}
   if(editId){const index=products.findIndex(p=>String(p.id)===String(editId));if(index<0){toast("Produto não encontrado");return}products[index]=product}
