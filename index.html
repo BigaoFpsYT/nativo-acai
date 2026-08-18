@@ -1578,6 +1578,7 @@ var GOOGLE_CLIENT_ID=(document.querySelector('meta[name="google-signin-client_id
 var TAB_SESSION_MARK="nativo_tab_session_initialized_v1";
 var OWNER_EMAIL="dono@nativoacai.com";
 let feedbackRating=0;
+var currentAccountMode="login";
 
 function safeParse(key,fallback){
   try{return JSON.parse(localStorage.getItem(key)||JSON.stringify(fallback))}catch(_){return fallback}
@@ -1711,6 +1712,7 @@ function openAccount(mode="login"){
   showLayer("accountModal");renderAccount(mode);
 }
 function renderAccount(mode="login"){
+  currentAccountMode=mode;
   const user=currentUser(),body=document.getElementById("accountBody"),sub=document.getElementById("accountModalSubtitle");
   if(user){
     sub.textContent="Conta conectada";
@@ -1833,6 +1835,15 @@ function handleGoogleCredential(response){
   let user=users.find(u=>u.googleSub===profile.sub||normalizeEmail(u.email)===email);
   if(user&&user.role!=="customer"){toast("Contas administrativas usam o login protegido por senha nesta versão");return}
   if(!user){
+    if(currentAccountMode!=="register"){
+      renderAccount("login");
+      setTimeout(()=>{
+        const note=document.getElementById("googleConfigNote");
+        if(note){note.classList.remove("hidden");note.textContent="Você ainda não tem uma conta criada na nossa loja. Clique em Criar conta para se cadastrar.";}
+      },0);
+      toast("Esta conta Google ainda não está cadastrada na loja");
+      return;
+    }
     user={id:uid("user"),name:compactSpaces(profile.name||profile.given_name||"Cliente Google"),phone:"",address:"",email,password:"",role:"customer",provider:"google",googleSub:profile.sub,picture:profile.picture||"",createdAt:new Date().toISOString()};
   }else{
     user.googleSub=profile.sub;user.provider="google";
