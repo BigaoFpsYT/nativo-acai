@@ -514,8 +514,13 @@ a{text-decoration:none;color:inherit}
 .google-profile-card h4{margin:0;font-size:16px;letter-spacing:-.02em}
 .google-profile-card p{margin:0;color:var(--muted);font-size:12px;line-height:1.55}
 .profile-image-editor{display:flex;align-items:center;gap:12px}
-.profile-image-preview{width:58px;height:58px;border-radius:16px;object-fit:cover;background:var(--purple-100);color:var(--purple-800);display:grid;place-items:center;font-weight:950;overflow:hidden}
-.profile-image-editor input{min-width:0;flex:1;font-size:11px}
+.profile-image-preview{width:68px;height:68px;border-radius:50%;object-fit:cover;background:var(--purple-100);color:var(--purple-800);display:grid;place-items:center;font-weight:950;overflow:hidden;box-shadow:0 0 0 4px white,0 0 0 5px var(--line);flex:0 0 auto}
+.profile-image-picker{display:grid;gap:5px;min-width:0}
+.profile-upload-button{width:max-content;border:1px solid #D5C4DA;background:var(--purple-50);color:var(--purple-900);border-radius:11px;padding:9px 12px;display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:900;cursor:pointer;transition:.2s ease}
+.profile-upload-button:hover{background:var(--purple-100);border-color:#BFA9C6;transform:translateY(-1px)}
+.profile-upload-button .icon{width:15px;height:15px}
+.profile-image-picker small{color:var(--muted);font-size:10px}
+.profile-image-editor input[type="file"]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 .google-auth-button{min-height:44px;display:flex;align-items:center;justify-content:center}
 .google-auth-fallback{width:100%;height:44px;border:1px solid #DADCE0;background:#fff;border-radius:10px;color:#3C4043;font-weight:750;font-size:13px;display:flex;align-items:center;justify-content:center;gap:10px}
 .google-auth-fallback:hover{background:#F8F9FA;border-color:#C9CCD1}
@@ -1778,7 +1783,7 @@ function editAccountProfile(){
       <h4>Editar perfil</h4>
       <div class="profile-image-editor">
         <div class="profile-image-preview" id="profileImagePreview">${user.picture?`<img src="${escapeHtml(user.picture)}" alt="" style="width:100%;height:100%;object-fit:cover">`:escapeHtml((user.name||"U").slice(0,1).toUpperCase())}</div>
-        <div class="field"><label>Imagem do perfil</label><input type="file" name="picture" accept="image/*" onchange="previewProfileImage(this)"></div>
+        <div class="profile-image-picker"><label class="profile-upload-button" for="profilePictureInput"><svg class="icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 13v5a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-5"/></svg>Trocar imagem</label><small>JPG ou PNG, até 5 MB</small><input id="profilePictureInput" type="file" name="picture" accept="image/*" onchange="previewProfileImage(this)"></div>
       </div>
       <div class="field"><label>Nome e sobrenome</label><input name="name" required autocomplete="name" maxlength="80" value="${escapeHtml(user.name||"")}"></div>
       <div class="field"><label>Endereço completo</label><input name="address" required autocomplete="street-address" placeholder="Ex.: Rua das Flores, 120, Centro" maxlength="140" value="${escapeHtml(user.address||"")}"><span class="field-help">Informe rua, número e bairro.</span></div>
