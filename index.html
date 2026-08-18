@@ -513,6 +513,9 @@ a{text-decoration:none;color:inherit}
 .google-profile-card{display:grid;gap:12px}
 .google-profile-card h4{margin:0;font-size:16px;letter-spacing:-.02em}
 .google-profile-card p{margin:0;color:var(--muted);font-size:12px;line-height:1.55}
+.profile-image-editor{display:flex;align-items:center;gap:12px}
+.profile-image-preview{width:58px;height:58px;border-radius:16px;object-fit:cover;background:var(--purple-100);color:var(--purple-800);display:grid;place-items:center;font-weight:950;overflow:hidden}
+.profile-image-editor input{min-width:0;flex:1;font-size:11px}
 .google-auth-button{min-height:44px;display:flex;align-items:center;justify-content:center}
 .google-auth-fallback{width:100%;height:44px;border:1px solid #DADCE0;background:#fff;border-radius:10px;color:#3C4043;font-weight:750;font-size:13px;display:flex;align-items:center;justify-content:center;gap:10px}
 .google-auth-fallback:hover{background:#F8F9FA;border-color:#C9CCD1}
@@ -1723,6 +1726,7 @@ function renderAccount(mode="login"){
         <span class="role-pill">${roleName(user.role)}</span>
       </div>
       <div class="account-actions">
+        <button class="btn btn-secondary" onclick="editAccountProfile()">Editar perfil</button>
         ${isAdminUser(user)?'<button class="btn btn-primary" onclick="closeModal(\'accountModal\');openAdminPanel()">Ir para área administrativa</button>':''}
         <button class="btn btn-secondary" onclick="logoutUser()">Sair da conta</button>
       </div>
@@ -1764,6 +1768,49 @@ function renderAccount(mode="login"){
       <div class="auth-note">A área administrativa só aparece para contas marcadas como <strong>Dono</strong> ou <strong>Funcionário</strong>.</div>
     `}`;
   setTimeout(initGoogleSignIn,0);
+}
+function editAccountProfile(){
+  const user=currentUser(),body=document.getElementById("accountBody"),sub=document.getElementById("accountModalSubtitle");
+  if(!user||!body||!sub)return;
+  sub.textContent="Atualize seus dados de cliente.";
+  body.innerHTML=`
+    <form class="google-profile-card" onsubmit="saveAccountProfile(event)">
+      <h4>Editar perfil</h4>
+      <div class="profile-image-editor">
+        <div class="profile-image-preview" id="profileImagePreview">${user.picture?`<img src="${escapeHtml(user.picture)}" alt="" style="width:100%;height:100%;object-fit:cover">`:escapeHtml((user.name||"U").slice(0,1).toUpperCase())}</div>
+        <div class="field"><label>Imagem do perfil</label><input type="file" name="picture" accept="image/*" onchange="previewProfileImage(this)"></div>
+      </div>
+      <div class="field"><label>Endereço completo</label><input name="address" required autocomplete="street-address" placeholder="Ex.: Rua das Flores, 120, Centro" maxlength="140" value="${escapeHtml(user.address||"")}"><span class="field-help">Informe rua, número e bairro.</span></div>
+      <div class="account-actions"><button type="button" class="btn btn-secondary" onclick="renderAccount()">Cancelar</button><button class="btn btn-primary">Salvar alterações</button></div>
+    </form>`;
+}
+function previewProfileImage(input){
+  const file=input.files?.[0],preview=document.getElementById("profileImagePreview");
+  if(!file||!preview)return;
+  const reader=new FileReader();reader.onload=()=>{preview.innerHTML=`<img src="${escapeHtml(reader.result)}" alt="" style="width:100%;height:100%;object-fit:cover">`};reader.readAsDataURL(file);
+}
+function readProfileImage(file){
+  return new Promise((resolve,reject)=>{
+    if(!file){resolve("");return}
+    const reader=new FileReader();reader.onerror=reject;reader.onload=()=>{
+      const image=new Image();image.onerror=reject;image.onload=()=>{
+        const size=320,scale=Math.min(1,size/Math.max(image.width,image.height)),canvas=document.createElement("canvas");
+        canvas.width=Math.max(1,Math.round(image.width*scale));canvas.height=Math.max(1,Math.round(image.height*scale));
+        canvas.getContext("2d").drawImage(image,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL("image/jpeg",.82));
+      };image.src=reader.result;
+    };reader.readAsDataURL(file);
+  });
+}
+async function saveAccountProfile(e){
+  e.preventDefault();
+  const user=currentUser();if(!user)return;
+  const fd=new FormData(e.currentTarget),address=compactSpaces(fd.get("address")),addressError=validateAddressValue(address);
+  if(addressError){toast(addressError);e.currentTarget.elements.address.focus();return}
+  try{
+    const picture=await readProfileImage(fd.get("picture"));
+    const users=getUsers(),index=users.findIndex(item=>item.id===user.id);if(index<0)return;
+    users[index].address=address;if(picture)users[index].picture=picture;saveUsers(users);renderAccount();toast("Perfil atualizado com sucesso");
+  }catch(_){toast("Não foi possível carregar essa imagem")}
 }
 function renderMyOrder(o){
   const canCancel=o.status==="Recebido";
