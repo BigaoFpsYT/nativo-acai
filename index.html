@@ -1225,6 +1225,7 @@ body{background:#F4F5F7}
         <button class="admin-tab" data-admin-tab="customers" onclick="showAdminTab('customers',this)">Clientes e endereços</button>
         <button class="admin-tab" data-admin-tab="feedback" onclick="showAdminTab('feedback',this)">Feedbacks</button>
         <button class="admin-tab admin-only-owner" data-admin-tab="products" onclick="showAdminTab('products',this)">Produtos</button>
+        <button class="admin-tab admin-only-owner" data-admin-tab="promotions" onclick="showAdminTab('promotions',this)">Promoções</button>
         <button class="admin-tab admin-only-owner" data-admin-tab="team" onclick="showAdminTab('team',this)">Equipe e acessos</button>
       </div>
       <div id="adminContent"></div>
@@ -1250,7 +1251,20 @@ var PRODUCT_CATEGORIES={classicos:"Clássicos",especiais:"Especiais",zero:"Sem a
 let products=loadProducts();
 
 let cart=JSON.parse(localStorage.getItem("nativo_cart")||"[]");
-let coupon=localStorage.getItem("nativo_coupon")==="PRIMEIRO5";
+const PROMOTIONS_KEY="nativo_promotions_v1";
+function normalizePromotion(value,index=0){
+  const source=value||{},code=compactSpaces(source.code).toUpperCase().replace(/\s+/g,"");
+  const type=source.type==="percent"?"percent":"fixed",amount=Number(source.value),minimum=Math.max(0,Number(source.min||0));
+  if(!/^[A-Z0-9_-]{3,24}$/.test(code)||!Number.isFinite(amount)||amount<=0||(type==="percent"&&amount>100))return null;
+  return {id:source.id||`promotion_${Date.now()}_${index}`,code,type,value:Number(amount.toFixed(2)),min:Number(minimum.toFixed(2)),active:source.active!==false};
+}
+function loadPromotions(){
+  const stored=JSON.parse(localStorage.getItem(PROMOTIONS_KEY)||"null");
+  if(!Array.isArray(stored))return [normalizePromotion({id:"primeiro5",code:"PRIMEIRO5",type:"fixed",value:5,active:true})];
+  return stored.map(normalizePromotion).filter(Boolean);
+}
+let promotions=loadPromotions();
+let coupon=localStorage.getItem("nativo_coupon")||"";
 let selectedProduct=null;
 
 const money=v=>v.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
@@ -1387,7 +1401,8 @@ function confirmCustom(){
 function saveCart(){localStorage.setItem("nativo_cart",JSON.stringify(cart));renderCart()}
 function cartSubtotal(){return cart.reduce((s,i)=>s+i.price*i.qty,0)}
 function delivery(){return cartSubtotal()>=45?0:7}
-function discount(){return coupon?Math.min(5,cartSubtotal()):0}
+function appliedPromotion(){const found=promotions.find(p=>p.active&&p.code===coupon);return found&&cartSubtotal()>=found.min?found:null}
+function discount(){const promotion=appliedPromotion(),subtotal=cartSubtotal();if(!promotion)return 0;return promotion.type==="percent"?Math.min(subtotal,subtotal*promotion.value/100):Math.min(subtotal,promotion.value)}
 function cartGrandTotal(){return Math.max(0,cartSubtotal()+delivery()-discount())}
 
 function renderCart(){
@@ -1398,7 +1413,7 @@ function renderCart(){
   document.getElementById("deliveryPrice").textContent=delivery()===0?"Grátis":money(delivery());
   document.getElementById("cartTotal").textContent=money(cartGrandTotal());
   document.getElementById("mobileTotal").textContent=money(cartGrandTotal());
-  document.getElementById("discountLine").classList.toggle("hidden",!coupon);
+  document.getElementById("discountLine").classList.toggle("hidden",!discount());
   document.getElementById("discountValue").textContent="- "+money(discount());
 
   const wrap=document.getElementById("cartItems");
@@ -1456,7 +1471,7 @@ function finishOrder(e){
   const order=captureOrderFromCheckout(code);
   if(!order){toast("Não foi possível registrar o pedido");return}
   sessionStorage.setItem(LAST_ORDER_KEY,order.id);
-  cart=[];coupon=false;localStorage.removeItem("nativo_cart");localStorage.removeItem("nativo_coupon");
+  cart=[];coupon="";localStorage.removeItem("nativo_cart");localStorage.removeItem("nativo_coupon");
   renderCart();closeModal("checkoutModal");
   e.currentTarget.reset();handleDeliveryTypeChange();
   toast("Pedido #"+code+" confirmado com sucesso");
@@ -1469,8 +1484,10 @@ function copyCoupon(){
 }
 function applyCoupon(){
   const v=document.getElementById("couponInput").value.trim().toUpperCase();
-  if(v==="PRIMEIRO5"){coupon=true;localStorage.setItem("nativo_coupon","PRIMEIRO5");renderCart();toast("Cupom aplicado: R$ 5 de desconto")}
-  else toast("Cupom inválido neste protótipo");
+  const promotion=promotions.find(p=>p.active&&p.code===v);
+  if(!promotion){toast("Promoção inválida ou inativa");return}
+  if(cartSubtotal()<promotion.min){toast(`Este cupom exige mínimo de ${money(promotion.min)}`);return}
+  coupon=v;localStorage.setItem("nativo_coupon",v);renderCart();toast("Promoção aplicada")
 }
 
 const policies={
@@ -2020,6 +2037,7 @@ function showAdminTab(tab,btn){
   if(tab==="customers")renderAdminCustomers();
   if(tab==="feedback")renderAdminFeedback();
   if(tab==="products")renderAdminProducts();
+  if(tab==="promotions")renderAdminPromotions();
   if(tab==="team")renderAdminTeam();
 }
 function renderAdminOrders(filter=""){
@@ -2055,6 +2073,39 @@ function renderAdminFeedback(filter=""){
   const q=String(filter||"").toLowerCase();
   const feedbacks=getFeedback().sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).filter(f=>!q||[f.displayName,f.text,String(f.rating)].join(" ").toLowerCase().includes(q));
   document.getElementById("adminContent").innerHTML=`<div class="admin-card"><div class="admin-card-head"><h3>Feedbacks recebidos</h3><input placeholder="Buscar por nome ou comentário" oninput="renderAdminFeedback(this.value)" value="${escapeHtml(filter)}"></div>${feedbacks.length?`<div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Avaliação</th><th>Cliente</th><th>Feedback</th><th>Data</th></tr></thead><tbody>${feedbacks.map(f=>`<tr><td><strong>${"★".repeat(Number(f.rating||0))}${"☆".repeat(Math.max(0,5-Number(f.rating||0)))}</strong><small>${Number(f.rating||0)}/5</small></td><td><strong>${escapeHtml(f.displayName||"Anônimo")}</strong><small>${f.anonymous?"Publicação anônima":"Conta identificada"}</small></td><td class="admin-items">${escapeHtml(f.text||"")}</td><td>${new Date(f.createdAt).toLocaleString("pt-BR")}</td></tr>`).join("")}</tbody></table></div>`:'<div class="admin-empty">Nenhum feedback recebido ainda.</div>'}</div>`;
+}
+function savePromotions(){localStorage.setItem(PROMOTIONS_KEY,JSON.stringify(promotions))}
+function renderAdminPromotions(){
+  if(!isOwner()){toast("Somente o dono pode gerenciar promoções");return}
+  document.getElementById("adminContent").innerHTML=`<div class="admin-card">
+    <div class="admin-card-head"><div><h3>Nova promoção</h3><small style="color:var(--muted)">Crie um código para o cliente aplicar no carrinho.</small></div></div>
+    <form class="admin-product-form" onsubmit="saveAdminPromotion(event)">
+      <div class="form-grid">
+        <div class="field"><label>Código</label><input name="code" required maxlength="24" pattern="[A-Za-z0-9_-]{3,24}" placeholder="VERAO10" style="text-transform:uppercase"></div>
+        <div class="field"><label>Tipo</label><select name="type"><option value="fixed">Valor fixo (R$)</option><option value="percent">Percentual (%)</option></select></div>
+        <div class="field"><label>Desconto</label><input name="value" required type="number" min="0.01" max="100" step="0.01" placeholder="10"></div>
+        <div class="field"><label>Pedido mínimo</label><input name="min" type="number" min="0" max="10000" step="0.01" value="0" placeholder="0"></div>
+      </div>
+      <div class="admin-product-actions"><button class="btn btn-primary" type="submit">Criar promoção</button></div>
+    </form>
+    ${promotions.length?`<div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Código</th><th>Desconto</th><th>Mínimo</th><th>Status</th><th>Ações</th></tr></thead><tbody>${promotions.map(p=>`<tr><td><strong>${escapeHtml(p.code)}</strong></td><td>${p.type==="percent"?`${p.value}%`:money(p.value)}</td><td>${p.min?money(p.min):"Sem mínimo"}</td><td><span class="status-pill">${p.active?"Ativa":"Inativa"}</span></td><td><div class="admin-user-actions"><button onclick="togglePromotion('${escapeHtml(p.id)}')">${p.active?"Desativar":"Ativar"}</button><button class="danger" onclick="deletePromotion('${escapeHtml(p.id)}')">Excluir</button></div></td></tr>`).join("")}</tbody></table></div>`:'<div class="admin-empty">Nenhuma promoção criada.</div>'}
+  </div>`;
+}
+function saveAdminPromotion(event){
+  event.preventDefault();
+  if(!isOwner()){toast("Somente o dono pode criar promoções");return}
+  const data=Object.fromEntries(new FormData(event.currentTarget).entries()),promotion=normalizePromotion(data);
+  if(!promotion){toast("Confira o código e o valor da promoção");return}
+  if(promotions.some(item=>item.code===promotion.code)){toast("Esse código já existe");return}
+  promotions.unshift(promotion);savePromotions();renderAdminPromotions();toast("Promoção criada");
+}
+function togglePromotion(id){
+  const promotion=promotions.find(item=>String(item.id)===String(id));if(!promotion)return;
+  promotion.active=!promotion.active;savePromotions();renderAdminPromotions();
+}
+function deletePromotion(id){
+  if(promotions.length<=1){toast("Mantenha pelo menos uma promoção cadastrada");return}
+  promotions=promotions.filter(item=>String(item.id)!==String(id));savePromotions();if(coupon&&!appliedPromotion()){coupon="";localStorage.removeItem("nativo_coupon")}renderAdminPromotions();toast("Promoção excluída");
 }
 function renderAdminProducts(editId=""){
   if(!isOwner()){toast("Somente o dono pode gerenciar produtos");return}
@@ -2120,6 +2171,7 @@ function syncOperationalUI(){
     if(currentAdminTab==="customers")renderAdminCustomers();
     if(currentAdminTab==="feedback")renderAdminFeedback();
     if(currentAdminTab==="products"&&isOwner())renderAdminProducts();
+    if(currentAdminTab==="promotions"&&isOwner())renderAdminPromotions();
     if(currentAdminTab==="team"&&isOwner())renderAdminTeam();
     document.querySelectorAll(".admin-tab").forEach(b=>b.classList.toggle("active",b===active));
   }
