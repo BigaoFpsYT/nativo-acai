@@ -350,6 +350,10 @@ a{text-decoration:none;color:inherit}
 
 @media(max-width:960px){
   .nav-links{display:none}
+  .market-nav{min-height:72px;height:auto;padding:10px 0}
+  .market-actions{gap:6px}
+  .market-action span{display:none}
+  .market-action{width:42px;height:42px;justify-content:center;padding:0}
   .hero-card{grid-template-columns:1fr}
   .hero-copy{padding:48px 34px}
   .hero-image{min-height:420px}
@@ -362,6 +366,10 @@ a{text-decoration:none;color:inherit}
   .container{width:min(100% - 22px,1180px)}
   .announcement{font-size:11px}
   .nav{height:66px}
+  .market-nav{min-height:64px;padding:8px 0}
+  .market-actions{gap:5px}
+  .market-action,.market-cart{width:38px;height:38px}
+  .market-cart .icon{width:18px;height:18px}
   .nav-actions .btn{display:none}
   .hero{padding:14px 0 38px}
   .hero-card{border-radius:24px}
@@ -389,6 +397,8 @@ a{text-decoration:none;color:inherit}
   .field.full{grid-column:auto}
   .radio-row{grid-template-columns:1fr}
   .modal{border-radius:20px}
+  .modal-body{padding:18px 16px}
+  .account-card{align-items:flex-start;flex-direction:column}
   .chat{right:14px;bottom:82px}
   .chat-launch{right:14px;bottom:14px}
   .mobile-cartbar{
@@ -477,6 +487,9 @@ a{text-decoration:none;color:inherit}
   .admin-stat{padding:14px}.admin-stat strong{font-size:20px}
   .account-actions{grid-template-columns:1fr}
   .admin-card-head{align-items:flex-start;flex-direction:column}.admin-card-head input{width:100%}
+  .admin-top-inner{height:auto;min-height:68px;padding:10px 0}
+  .admin-title h2{font-size:16px}
+  .admin-title small{font-size:10px}
 }
 
 /* ===== MELHORIAS OPERACIONAIS: validação, alerta de entrega, feedback e Nati ===== */
@@ -497,6 +510,9 @@ a{text-decoration:none;color:inherit}
 .typing-dots span:nth-child(2){animation-delay:.14s}.typing-dots span:nth-child(3){animation-delay:.28s}
 @keyframes natiTyping{0%,60%,100%{transform:translateY(0);opacity:.45}30%{transform:translateY(-3px);opacity:1}}
 .google-auth-area{margin-bottom:16px}
+.google-profile-card{display:grid;gap:12px}
+.google-profile-card h4{margin:0;font-size:16px;letter-spacing:-.02em}
+.google-profile-card p{margin:0;color:var(--muted);font-size:12px;line-height:1.55}
 .google-auth-button{min-height:44px;display:flex;align-items:center;justify-content:center}
 .google-auth-fallback{width:100%;height:44px;border:1px solid #DADCE0;background:#fff;border-radius:10px;color:#3C4043;font-weight:750;font-size:13px;display:flex;align-items:center;justify-content:center;gap:10px}
 .google-auth-fallback:hover{background:#F8F9FA;border-color:#C9CCD1}
@@ -1647,8 +1663,8 @@ function handleDeliveryTypeChange(){
 }
 function prefillCheckout(){
   const user=currentUser();if(!user)return;
-  const name=document.getElementById("checkoutName"),phone=document.getElementById("checkoutPhone");
-  if(name&&!name.value)name.value=user.name||"";if(phone&&!phone.value)phone.value=formatPhoneBR(user.phone||"");
+  const name=document.getElementById("checkoutName"),phone=document.getElementById("checkoutPhone"),address=document.getElementById("checkoutAddress");
+  if(name&&!name.value)name.value=user.name||"";if(phone&&!phone.value)phone.value=formatPhoneBR(user.phone||"");if(address&&!address.value)address.value=user.address||"";
 }
 
 function getUsers(){return safeParse(AUTH_USERS_KEY,[])}
@@ -1817,14 +1833,47 @@ function handleGoogleCredential(response){
   let user=users.find(u=>u.googleSub===profile.sub||normalizeEmail(u.email)===email);
   if(user&&user.role!=="customer"){toast("Contas administrativas usam o login protegido por senha nesta versão");return}
   if(!user){
-    user={id:uid("user"),name:compactSpaces(profile.name||profile.given_name||"Cliente Google"),phone:"",email,password:"",role:"customer",provider:"google",googleSub:profile.sub,picture:profile.picture||"",createdAt:new Date().toISOString()};
-    users.push(user);
+    user={id:uid("user"),name:compactSpaces(profile.name||profile.given_name||"Cliente Google"),phone:"",address:"",email,password:"",role:"customer",provider:"google",googleSub:profile.sub,picture:profile.picture||"",createdAt:new Date().toISOString()};
   }else{
     user.googleSub=profile.sub;user.provider="google";
     if(profile.name)user.name=compactSpaces(profile.name);
     if(profile.picture)user.picture=profile.picture;
   }
+  if(!user.phone||!user.address){
+    window.pendingGoogleUser={user,isNew:!users.some(item=>item.id===user.id)};
+    renderGoogleProfileForm(user);
+    return;
+  }
+  if(!users.some(item=>item.id===user.id))users.push(user);
   saveUsers(users);setSession(user.id);updateAccessUI();renderAccount();renderFeedbackIdentity();toast("Login com Google realizado");
+}
+function renderGoogleProfileForm(user){
+  const body=document.getElementById("accountBody"),sub=document.getElementById("accountModalSubtitle");
+  if(!body||!sub)return;
+  sub.textContent="Complete seus dados para continuar.";
+  body.innerHTML=`
+    <form class="google-profile-card" onsubmit="finishGoogleProfile(event)">
+      <h4>Mais um passo</h4>
+      <p>Para entregar seu pedido, informe seu WhatsApp e endereço. Esses dados ficam salvos apenas nesta conta.</p>
+      <div class="field"><label>WhatsApp</label><input name="phone" required autocomplete="tel" inputmode="tel" placeholder="(51) 99999-9999" maxlength="16" oninput="this.value=formatPhoneBR(this.value)"></div>
+      <div class="field"><label>Endereço completo</label><input name="address" required autocomplete="street-address" placeholder="Ex.: Rua das Flores, 120, Centro" maxlength="140"></div>
+      <button class="btn btn-primary btn-block" style="margin-top:4px">Salvar e continuar</button>
+    </form>`;
+  body.querySelector('[name="phone"]').value=formatPhoneBR(user.phone||"");
+  body.querySelector('[name="address"]').value=user.address||"";
+}
+function finishGoogleProfile(e){
+  e.preventDefault();
+  const pending=window.pendingGoogleUser;if(!pending)return;
+  const fd=new FormData(e.currentTarget),phone=String(fd.get("phone")||"").trim(),address=compactSpaces(fd.get("address"));
+  const phoneError=validatePhoneValue(phone),addressError=validateAddressValue(address);
+  if(phoneError){toast(phoneError);e.currentTarget.elements.phone.focus();return}
+  if(addressError){toast(addressError);e.currentTarget.elements.address.focus();return}
+  pending.user.phone=formatPhoneBR(phone);pending.user.address=address;
+  const users=getUsers(),index=users.findIndex(item=>item.id===pending.user.id);
+  if(index>=0)users[index]=pending.user;else users.push(pending.user);
+  saveUsers(users);setSession(pending.user.id);window.pendingGoogleUser=null;
+  updateAccessUI();renderAccount();renderFeedbackIdentity();toast("Conta Google criada com sucesso");
 }
 let googleInitTries=0;
 function initGoogleSignIn(force=false){
